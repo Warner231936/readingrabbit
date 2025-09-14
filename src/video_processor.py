@@ -18,6 +18,7 @@ class VideoProcessor:
     def process(self):
         cap = cv2.VideoCapture(self.video_path)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+        start_time = time.time()
         with self.output_path.open("w", encoding="utf-8") as f:
             frame_idx = 0
             while not self.stop_event.is_set():
@@ -29,6 +30,9 @@ class VideoProcessor:
                     f.write(text + "\n")
                 frame_idx += 1
                 progress = (frame_idx / total_frames) * 100
-                self.update_callback(frame, progress)
+                elapsed = time.time() - start_time
+                fps = frame_idx / elapsed if elapsed else 0
+                eta = (total_frames - frame_idx) / fps if fps else 0
+                self.update_callback(frame, progress, eta)
                 time.sleep(0.01)  # simulate processing delay
         cap.release()

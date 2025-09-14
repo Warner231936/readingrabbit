@@ -5,3 +5,5 @@ use_gpu: true
 threads: 4
 ui_theme: dark
 llm_model: placeholder-llm  # specify LLM model identifier
+show_resource_usage: true  # toggle resource monitoring in GUI
+monitor_interval: 1.0  # seconds between resource updates

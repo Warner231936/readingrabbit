@@ -3,3 +3,4 @@ pytesseract
 Pillow
 psutil
 PyYAML
+gputil
