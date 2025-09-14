@@ -4,3 +4,5 @@ Pillow
 psutil
 PyYAML
 gputil
+torch
+transformers

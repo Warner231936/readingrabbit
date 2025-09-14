@@ -6,12 +6,21 @@ from pathlib import Path
 from threading import Event
 
 from .ocr import extract_text
+from .llm import verify_text
 
 
 class VideoProcessor:
-    def __init__(self, video_path: str, output_path: str, update_callback, stop_event: Event):
+    def __init__(
+        self,
+        video_path: str,
+        output_path: str,
+        llm_model: str,
+        update_callback,
+        stop_event: Event,
+    ):
         self.video_path = video_path
         self.output_path = Path(output_path)
+        self.llm_model = llm_model
         self.update_callback = update_callback
         self.stop_event = stop_event
 
@@ -27,6 +36,7 @@ class VideoProcessor:
                     break
                 text = extract_text(frame)
                 if text:
+                    text = verify_text(text, self.llm_model)
                     f.write(text + "\n")
                 frame_idx += 1
                 progress = (frame_idx / total_frames) * 100

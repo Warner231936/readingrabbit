@@ -4,6 +4,6 @@ output_text_path: output.txt
 use_gpu: true
 threads: 4
 ui_theme: dark
-llm_model: placeholder-llm  # specify LLM model identifier
+llm_model: t5-small  # Hugging Face model identifier for verification
 show_resource_usage: true  # toggle resource monitoring in GUI
 monitor_interval: 1.0  # seconds between resource updates
