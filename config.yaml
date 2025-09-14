@@ -1,0 +1,7 @@
+# Global configuration for ReadingRabbit OCR application
+video_path: sample.mp4  # placeholder path to input video
+output_text_path: output.txt
+use_gpu: true
+threads: 4
+ui_theme: dark
+llm_model: placeholder-llm  # specify LLM model identifier
