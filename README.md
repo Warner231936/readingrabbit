@@ -36,3 +36,17 @@ GPU statistics require a compatible GPU and the `gputil` package.
 ## Status
 This project is under active development. See `AGENTS.md` for detailed
 progress tracking and upcoming tasks.
+
+## Troubleshooting
+- **Tesseract not found**: Ensure `tesseract.exe` is installed and added to
+  your `PATH`.
+- **Missing GPU metrics**: Install compatible GPU drivers and verify that the
+  `gputil` package detects your hardware.
+- **Model download errors**: The first run downloads the `t5-small` model from
+  Hugging Face. Confirm internet access or pre-download the model.
+
+## Advanced Usage
+- **Selecting a different LLM**: Edit `llm_model` in `config.yaml` with any
+  compatible text-to-text model from Hugging Face.
+- **Disabling LLM verification**: Set `llm_model` to an empty string to write
+  raw OCR text without model correction.

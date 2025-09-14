@@ -26,6 +26,7 @@ def main():
         processor = VideoProcessor(
             config.video_path,
             config.output_text_path,
+            config.llm_model,
             update_callback=lambda frame, prog, eta: (
                 gui.show_frame(frame),
                 gui.update_progress(prog),
