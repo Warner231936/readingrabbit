@@ -1,7 +1,7 @@
 """Tkinter-based GUI for ReadingRabbit OCR."""
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from typing import Callable, Optional
 import time
 
@@ -10,8 +10,16 @@ from PIL import Image, ImageTk
 
 
 class AppGUI:
-    def __init__(self, master: tk.Tk, on_start: Callable[[], None]):
+    def __init__(
+        self,
+        master: tk.Tk,
+        on_start: Callable[[], None],
+        on_toggle_monitor: Optional[Callable[[bool], None]] = None,
+    ):
         self.master = master
+        self.on_toggle_monitor = on_toggle_monitor
+        self.monitoring = True
+        self.monitor_button: Optional[ttk.Button] = None
         master.title("ReadingRabbit")
         master.configure(bg="#0b0c10")
         style = ttk.Style(master)
@@ -43,6 +51,14 @@ class AppGUI:
         )
         self.start_button.pack(padx=10, pady=10)
 
+        if self.on_toggle_monitor is not None:
+            self.monitor_button = ttk.Button(
+                master,
+                text="Pause Monitor",
+                command=self._toggle_monitor,
+            )
+            self.monitor_button.pack(padx=10, pady=10)
+
     def update_progress(self, value: float):
         self.progress['value'] = value
         self.master.update_idletasks()
@@ -59,8 +75,11 @@ class AppGUI:
         self.video_label.configure(image=imgtk)
         self.master.update_idletasks()
 
-    def update_resources(self, cpu: float, gpu: Optional[float], ram: float):
-        gpu_text = f"{gpu:.1f}%" if gpu is not None else "N/A"
+    def update_resources(self, cpu: float, gpu: Optional[float], gpu_mem: Optional[float], ram: float):
+        if gpu is not None and gpu_mem is not None:
+            gpu_text = f"{gpu:.1f}% | VRAM: {gpu_mem:.1f}%"
+        else:
+            gpu_text = "N/A | VRAM: N/A"
         self.resources_label['text'] = f"CPU: {cpu:.1f}% | GPU: {gpu_text} | RAM: {ram:.1f}%"
         self.master.update_idletasks()
 
@@ -68,3 +87,13 @@ class AppGUI:
         eta_str = time.strftime('%H:%M:%S', time.gmtime(seconds)) if seconds else "00:00:00"
         self.eta_label['text'] = f"ETA: {eta_str}"
         self.master.update_idletasks()
+
+    def show_error(self, text: str):
+        messagebox.showerror("ReadingRabbit Error", text)
+
+    def _toggle_monitor(self):
+        self.monitoring = not self.monitoring
+        if self.monitor_button:
+            self.monitor_button['text'] = "Resume Monitor" if not self.monitoring else "Pause Monitor"
+        if self.on_toggle_monitor:
+            self.on_toggle_monitor(self.monitoring)

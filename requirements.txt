@@ -6,3 +6,4 @@ PyYAML
 gputil
 torch
 transformers
+easyocr
