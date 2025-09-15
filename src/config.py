@@ -10,6 +10,9 @@ class AppConfig:
     video_path: str
     output_text_path: str
     use_gpu: bool
+    gpu_index: int
+    ocr_languages: list[str]
+    prompt_template: str
     threads: int
     ui_theme: str
     llm_model: str
