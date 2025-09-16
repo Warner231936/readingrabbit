@@ -11,3 +11,34 @@ ui_theme: dark
 llm_model: t5-small  # Hugging Face model identifier for verification
 show_resource_usage: true  # toggle resource monitoring in GUI
 monitor_interval: 1.0  # seconds between resource updates
+resource_history_seconds: 120  # length of resource usage history to plot
+resource_chart_height: 160  # pixel height of the resource history chart
+themes:
+  dark:
+    background: "#0b0c10"
+    surface: "#1f2833"
+    accent: "#45a29e"
+    text: "#c5c6c7"
+    highlight: "#66fcf1"
+    danger: "#ff6b6b"
+    font: "Segoe UI"
+    font_size: 11
+    chart_colors:
+      cpu: "#66fcf1"
+      ram: "#45a29e"
+      gpu: "#ff9f1c"
+      vram: "#f15bb5"
+  midnight:
+    background: "#050608"
+    surface: "#10131a"
+    accent: "#00c2ff"
+    text: "#d8dee9"
+    highlight: "#88c0d0"
+    danger: "#ff5370"
+    font: "Segoe UI"
+    font_size: 11
+    chart_colors:
+      cpu: "#88c0d0"
+      ram: "#00c2ff"
+      gpu: "#ff9f1c"
+      vram: "#c084fc"
