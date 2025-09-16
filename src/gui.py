@@ -26,7 +26,10 @@ class AppGUI:
         self.progress.pack(padx=10, pady=10)
 
         self.status_label = ttk.Label(master, text="Idle")
-        self.status_label.pack(padx=10, pady=10)
+        self.status_label.pack(padx=10, pady=5)
+
+        self.resource_label = ttk.Label(master, text="CPU: 0%  RAM: 0%  GPU: 0%  ETA: 0s")
+        self.resource_label.pack(padx=10, pady=5)
 
         self.start_button = ttk.Button(master, text="Start", command=lambda: threading.Thread(target=on_start, daemon=True).start())
         self.start_button.pack(padx=10, pady=10)
@@ -37,6 +40,11 @@ class AppGUI:
 
     def update_status(self, text: str):
         self.status_label['text'] = text
+        self.master.update_idletasks()
+
+    def update_resources(self, cpu: float, ram: float, gpu: float, eta: float):
+        gpu_text = f"GPU: {gpu:.0f}%" if gpu else "GPU: N/A"
+        self.resource_label['text'] = f"CPU: {cpu:.0f}%  RAM: {ram:.0f}%  {gpu_text}  ETA: {eta:.0f}s"
         self.master.update_idletasks()
 
     def show_frame(self, frame):

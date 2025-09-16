@@ -5,3 +5,4 @@ use_gpu: true
 threads: 4
 ui_theme: dark
 llm_model: placeholder-llm  # specify LLM model identifier
+monitor_interval: 1.0  # seconds between resource updates

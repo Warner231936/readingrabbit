@@ -13,6 +13,7 @@ class AppConfig:
     threads: int
     ui_theme: str
     llm_model: str
+    monitor_interval: float
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
