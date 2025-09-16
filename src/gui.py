@@ -334,6 +334,13 @@ class AppGUI:
         self.eta_label = ttk.Label(container, text="ETA: --:--:--", style="Resources.TLabel")
         self.eta_label.pack(padx=10, pady=(6, 12))
 
+
+        self.status_label = ttk.Label(master, text="Idle")
+        self.status_label.pack(padx=10, pady=5)
+
+        self.resource_label = ttk.Label(master, text="CPU: 0%  RAM: 0%  GPU: 0%  ETA: 0s")
+        self.resource_label.pack(padx=10, pady=5)
+
         self.start_button = ttk.Button(container, text="Start", command=self._on_start_clicked)
         self.start_button.pack(padx=10, pady=(0, 12))
 
@@ -381,7 +388,15 @@ class AppGUI:
         self.status_label["text"] = text
         self.master.update_idletasks()
 
+    def update_resources(self, cpu: float, ram: float, gpu: float, eta: float):
+        gpu_text = f"GPU: {gpu:.0f}%" if gpu else "GPU: N/A"
+        self.resource_label['text'] = f"CPU: {cpu:.0f}%  RAM: {ram:.0f}%  {gpu_text}  ETA: {eta:.0f}s"
+        self.master.update_idletasks()
+
+    def show_frame(self, frame):
+
     def show_frame(self, frame) -> None:
+
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(img)
         imgtk = ImageTk.PhotoImage(image=img)

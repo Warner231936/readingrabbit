@@ -19,11 +19,15 @@ class AppConfig:
     threads: int
     ui_theme: str
     llm_model: str
+
+    monitor_interval: float
+
     show_resource_usage: bool
     monitor_interval: float
     themes: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     resource_history_seconds: int = 90
     resource_chart_height: int = 140
+
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:

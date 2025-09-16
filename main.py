@@ -10,11 +10,25 @@ from src.config import load_config
 from src.gui import AppGUI
 from src.resource_monitor import ResourceMonitor
 from src.video_processor import VideoProcessor
+from src.resource_monitor import ResourceMonitor
 
 
 def main():
     config = load_config()
     stop_event = Event()
+
+    resource_monitor: ResourceMonitor | None = None
+
+    def start_processing():
+        nonlocal resource_monitor
+        gui.update_status("Processing...")
+        resource_monitor = ResourceMonitor(
+            callback=lambda c, r, g, e: gui.update_resources(c, r, g, e),
+            interval=config.monitor_interval,
+            use_gpu=config.use_gpu,
+        )
+        resource_monitor.start()
+
     monitor_pause_event = Event()
     monitor_thread: Optional[threading.Thread] = None
     closing = False
@@ -40,12 +54,31 @@ def main():
             )
             monitor_thread = threading.Thread(target=monitor.run, daemon=True)
             monitor_thread.start()
+
         processor = VideoProcessor(
             config,
             update_callback=lambda frame, prog, eta: (
                 gui.show_frame(frame),
                 gui.update_progress(prog),
                 gui.update_status(f"{prog:.2f}%"),
+
+                resource_monitor.update_progress(prog) if resource_monitor else None,
+            ),
+            stop_event=stop_event,
+        )
+        processor.process()
+        if resource_monitor:
+            resource_monitor.stop()
+        gui.update_status("Completed")
+
+    root = tk.Tk()
+    gui = AppGUI(root, on_start=start_processing)
+
+    def on_close():
+        stop_event.set()
+        if resource_monitor:
+            resource_monitor.stop()
+
                 gui.update_eta(eta),
             ),
             stop_event=stop_event,
@@ -86,6 +119,7 @@ def main():
         if monitor_thread and monitor_thread.is_alive():
             monitor_thread.join(timeout=2.0)
             monitor_thread = None
+
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)

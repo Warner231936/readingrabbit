@@ -3,7 +3,11 @@ pytesseract
 Pillow
 psutil
 PyYAML
+
+GPUtil
+
 gputil
 torch
 transformers
 easyocr
+

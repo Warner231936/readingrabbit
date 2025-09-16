@@ -8,6 +8,10 @@ ocr_languages:
 prompt_template: "Correct the OCR text: {text}"
 threads: 4
 ui_theme: dark
+
+llm_model: placeholder-llm  # specify LLM model identifier
+monitor_interval: 1.0  # seconds between resource updates
+
 llm_model: t5-small  # Hugging Face model identifier for verification
 show_resource_usage: true  # toggle resource monitoring in GUI
 monitor_interval: 1.0  # seconds between resource updates
@@ -42,3 +46,4 @@ themes:
       ram: "#00c2ff"
       gpu: "#ff9f1c"
       vram: "#c084fc"
+
