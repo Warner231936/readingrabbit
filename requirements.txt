@@ -1,13 +1,9 @@
+easyocr
+gputil
 opencv-python
-pytesseract
 Pillow
 psutil
 PyYAML
-
-GPUtil
-
-gputil
+pytesseract
 torch
 transformers
-easyocr
-

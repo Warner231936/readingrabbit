@@ -1,6 +1,6 @@
 # Global configuration for ReadingRabbit OCR application
-video_path: sample.mp4  # placeholder path to input video
-output_text_path: output.txt
+video_path: sample.mp4  # placeholder path to input video on Windows
+output_text_path: output/transcript.txt
 use_gpu: true
 gpu_index: 0
 ocr_languages:
@@ -8,15 +8,18 @@ ocr_languages:
 prompt_template: "Correct the OCR text: {text}"
 threads: 4
 ui_theme: dark
-
-llm_model: placeholder-llm  # specify LLM model identifier
-monitor_interval: 1.0  # seconds between resource updates
-
-llm_model: t5-small  # Hugging Face model identifier for verification
-show_resource_usage: true  # toggle resource monitoring in GUI
-monitor_interval: 1.0  # seconds between resource updates
-resource_history_seconds: 120  # length of resource usage history to plot
-resource_chart_height: 160  # pixel height of the resource history chart
+llm_model: t5-small
+show_resource_usage: true
+monitor_interval: 1.0
+resource_history_seconds: 120
+resource_chart_height: 160
+resource_log_path: logs/resource_history.csv
+alert_cooldown_seconds: 45.0
+resource_alerts:
+  cpu: 95
+  ram: 90
+  gpu: 90
+  vram: 90
 themes:
   dark:
     background: "#0b0c10"
@@ -46,4 +49,3 @@ themes:
       ram: "#00c2ff"
       gpu: "#ff9f1c"
       vram: "#c084fc"
-
