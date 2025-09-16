@@ -256,6 +256,10 @@ class AppGUI:
         monitor_interval: float = 1.0,
         chart_height: int = 160,
         resource_log_path: Optional[str] = None,
+        resource_summary_path: Optional[str] = None,
+        resource_alert_history_path: Optional[str] = None,
+        layout: str = "stacked",
+        scaling: float = 1.0,
     ) -> None:
         self.master = master
         self._on_start = on_start
@@ -266,11 +270,28 @@ class AppGUI:
         self._processing = False
         self._resource_placeholder = "CPU: --% | GPU: --% | VRAM: --% | RAM: --%"
         self._resource_log_path = Path(resource_log_path).expanduser() if resource_log_path else None
+        self._resource_summary_path = (
+            Path(resource_summary_path).expanduser() if resource_summary_path else None
+        )
+        self._alert_history_path = (
+            Path(resource_alert_history_path).expanduser()
+            if resource_alert_history_path
+            else None
+        )
         self.log_button: Optional[ttk.Button] = None
+        self.summary_button: Optional[ttk.Button] = None
+        self.alert_button: Optional[ttk.Button] = None
+        self.summary_label: Optional[ttk.Label] = None
+        self._layout = layout.lower()
+        self._summary_placeholder = "Summary will appear after processing."
 
         self.theme = build_theme(theme)
         master.title("ReadingRabbit")
         master.configure(bg=self.theme["background"])
+        try:
+            master.tk.call("tk", "scaling", float(max(0.5, scaling)))
+        except Exception:
+            pass
 
         style = ttk.Style(master)
         style.theme_use("clam")
@@ -319,67 +340,176 @@ class AppGUI:
 
         container = ttk.Frame(master, padding=20)
         container.pack(fill="both", expand=True)
+        container.columnconfigure(0, weight=1)
+        container.rowconfigure(0, weight=1)
 
-        self.video_label = ttk.Label(container, style="TLabel")
-        self.video_label.pack(padx=10, pady=(0, 12))
+        if self._layout == "compact":
+            main_frame = ttk.Frame(container)
+            side_frame = ttk.Frame(container)
+            main_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+            side_frame.grid(row=0, column=1, sticky="nsew")
+            container.columnconfigure(0, weight=3)
+            container.columnconfigure(1, weight=2)
+            container.rowconfigure(0, weight=1)
+            self._build_main_panel(main_frame)
+            self._build_side_panel(
+                side_frame,
+                show_resource_usage,
+                history_seconds,
+                monitor_interval,
+                chart_height,
+            )
+        else:
+            main_frame = ttk.Frame(container)
+            main_frame.grid(row=0, column=0, sticky="nsew")
+            self._build_stacked_panel(
+                main_frame,
+                show_resource_usage,
+                history_seconds,
+                monitor_interval,
+                chart_height,
+            )
+
+    def _build_main_panel(self, parent: ttk.Frame) -> None:
+        parent.columnconfigure(0, weight=1)
+
+        self.video_label = ttk.Label(parent, style="TLabel")
+        self.video_label.grid(row=0, column=0, pady=(0, 12))
 
         self.progress = ttk.Progressbar(
-            container,
+            parent,
             orient="horizontal",
             length=420,
             mode="determinate",
         )
-        self.progress.pack(padx=10, pady=6)
+        self.progress.grid(row=1, column=0, sticky="ew", pady=6)
 
-        self.status_label = ttk.Label(container, text="Idle", style="Status.TLabel")
-        self.status_label.pack(padx=10, pady=6)
+        self.status_label = ttk.Label(parent, text="Idle", style="Status.TLabel")
+        self.status_label.grid(row=2, column=0, sticky="w", pady=6)
+
+        self.start_button = ttk.Button(parent, text="Start", command=self._on_start_clicked)
+        self.start_button.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+
+    def _build_side_panel(
+        self,
+        parent: ttk.Frame,
+        show_resource_usage: bool,
+        history_seconds: int,
+        monitor_interval: float,
+        chart_height: int,
+    ) -> None:
+        parent.columnconfigure(0, weight=1)
 
         resources_text = self._resource_placeholder
         if not show_resource_usage:
             resources_text = "Resource monitoring disabled in config."
         self.resources_label = ttk.Label(
-            container,
+            parent,
             text=resources_text,
             style="Resources.TLabel",
+            wraplength=360,
+            justify="left",
         )
-        self.resources_label.pack(padx=10, pady=6)
+        self.resources_label.grid(row=0, column=0, sticky="w", pady=6)
 
         self.history_canvas: Optional[ResourceHistoryCanvas] = None
+        row = 1
         if show_resource_usage:
             self.history_canvas = ResourceHistoryCanvas(
-                container,
+                parent,
                 history_seconds=history_seconds,
                 monitor_interval=monitor_interval,
                 theme=self.theme,
                 height=chart_height,
             )
-            self.history_canvas.pack(padx=10, pady=(6, 12))
+            self.history_canvas.grid(row=row, column=0, sticky="ew", pady=(6, 12))
+            row += 1
 
-        self.eta_label = ttk.Label(container, text="ETA: 00:00:00", style="Resources.TLabel")
-        self.eta_label.pack(padx=10, pady=(6, 12))
+        self.eta_label = ttk.Label(parent, text="ETA: 00:00:00", style="Resources.TLabel")
+        self.eta_label.grid(row=row, column=0, sticky="w", pady=(6, 12))
+        row += 1
 
-        self.alert_label = ttk.Label(container, text="", style="Alert.TLabel")
-        self.alert_label.pack(padx=10, pady=(0, 12))
+        self.alert_label = ttk.Label(parent, text="", style="Alert.TLabel")
+        self.alert_label.grid(row=row, column=0, sticky="w", pady=(0, 12))
+        row += 1
 
-        self.start_button = ttk.Button(container, text="Start", command=self._on_start_clicked)
-        self.start_button.pack(padx=10, pady=(0, 12))
+        self.summary_label = ttk.Label(
+            parent,
+            text=self._summary_placeholder,
+            style="Resources.TLabel",
+            wraplength=360,
+            justify="left",
+        )
+        self.summary_label.grid(row=row, column=0, sticky="w", pady=(0, 12))
+        row += 1
 
         if self.on_toggle_monitor is not None and show_resource_usage:
             self.monitor_button = ttk.Button(
-                container,
+                parent,
                 text="Pause Monitor",
                 command=self._toggle_monitor,
             )
-            self.monitor_button.pack(padx=10, pady=(0, 12))
+            self.monitor_button.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+            row += 1
 
         if self._resource_log_path is not None and show_resource_usage:
-            self.log_button = ttk.Button(
-                container,
-                text="Open Resource Log",
-                command=self._open_resource_log,
+            self.log_button = self._create_open_button(
+                parent,
+                "Open Resource Log",
+                self._open_resource_log,
+                row,
             )
-            self.log_button.state(["disabled"])
-            self.log_button.pack(padx=10, pady=(0, 12))
+            row += 1
+
+        if self._resource_summary_path is not None:
+            self.summary_button = self._create_open_button(
+                parent,
+                "Open Resource Summary",
+                self._open_resource_summary,
+                row,
+            )
+            row += 1
+
+        if self._alert_history_path is not None:
+            self.alert_button = self._create_open_button(
+                parent,
+                "Open Alert History",
+                self._open_alert_history,
+                row,
+            )
+
+    def _build_stacked_panel(
+        self,
+        parent: ttk.Frame,
+        show_resource_usage: bool,
+        history_seconds: int,
+        monitor_interval: float,
+        chart_height: int,
+    ) -> None:
+        top = ttk.Frame(parent)
+        top.pack(fill="x")
+        bottom = ttk.Frame(parent)
+        bottom.pack(fill="both", expand=True, pady=(12, 0))
+        self._build_main_panel(top)
+        self._build_side_panel(
+            bottom,
+            show_resource_usage,
+            history_seconds,
+            monitor_interval,
+            chart_height,
+        )
+
+    def _create_open_button(
+        self,
+        parent: ttk.Frame,
+        text: str,
+        command: Callable[[], None],
+        row: int,
+    ) -> ttk.Button:
+        button = ttk.Button(parent, text=text, command=command)
+        button.state(["disabled"])
+        button.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+        return button
 
     def _on_start_clicked(self) -> None:
         if self._processing:
@@ -415,6 +545,7 @@ class AppGUI:
         self.update_status("Initializing…")
         self.update_progress(0.0)
         self.update_eta(0.0)
+        self.clear_summary()
         if self.history_canvas is not None:
             self.master.after(0, self.history_canvas.clear)
         if self.monitor_button is not None:
@@ -433,6 +564,17 @@ class AppGUI:
     def clear_alert(self) -> None:
         def update() -> None:
             self.alert_label.configure(text="")
+
+        self.master.after(0, update)
+
+    def clear_summary(self) -> None:
+        def update() -> None:
+            if self.summary_label is not None:
+                self.summary_label.configure(text=self._summary_placeholder)
+            if self.summary_button is not None:
+                self.summary_button.state(["disabled"])
+            if self.alert_button is not None:
+                self.alert_button.state(["disabled"])
 
         self.master.after(0, update)
 
@@ -501,6 +643,29 @@ class AppGUI:
 
         self.master.after(0, update)
 
+    def show_summary(
+        self,
+        text: str,
+        summary_path: Optional[str],
+        alert_log_path: Optional[str],
+    ) -> None:
+        def update() -> None:
+            if self.summary_label is not None:
+                self.summary_label.configure(text=text)
+            if summary_path:
+                path = Path(summary_path).expanduser()
+                self._resource_summary_path = path
+                if self.summary_button is not None and path.exists():
+                    self.summary_button.state(["!disabled"])
+            if alert_log_path:
+                path = Path(alert_log_path).expanduser()
+                self._alert_history_path = path
+                if self.alert_button is not None and path.exists():
+                    self.alert_button.state(["!disabled"])
+            messagebox.showinfo("Resource Summary", text)
+
+        self.master.after(0, update)
+
     def _toggle_monitor(self) -> None:
         self.monitoring = not self.monitoring
         if self.monitor_button:
@@ -513,11 +678,23 @@ class AppGUI:
     def _open_resource_log(self) -> None:
         if self._resource_log_path is None:
             return
-        path = self._resource_log_path
+        self._open_path(self._resource_log_path, "Resource Log")
+
+    def _open_resource_summary(self) -> None:
+        if self._resource_summary_path is None:
+            return
+        self._open_path(self._resource_summary_path, "Resource Summary")
+
+    def _open_alert_history(self) -> None:
+        if self._alert_history_path is None:
+            return
+        self._open_path(self._alert_history_path, "Alert History")
+
+    def _open_path(self, path: Path, description: str) -> None:
         if not path.exists():
             messagebox.showinfo(
-                "Resource Log",
-                f"The log will be created at: {path.resolve()}",
+                description,
+                f"The file will be created at: {path.resolve()}",
             )
             return
         try:
@@ -526,6 +703,6 @@ class AppGUI:
             else:
                 webbrowser.open(path.resolve().as_uri())
         except Exception as exc:  # pragma: no cover - platform specific
-            messagebox.showerror("Resource Log", f"Unable to open log file: {exc}")
+            messagebox.showerror(description, f"Unable to open file: {exc}")
 
 

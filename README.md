@@ -15,6 +15,9 @@ monitoring with historical charts, alerts, and CSV exports.
   controls.
 - Automatic resource alerting with configurable thresholds and cooldowns.
 - Resource usage logging to CSV for later analysis.
+- Automatic post-run analytics with JSON summaries and optional alert history
+  exports.
+- Flexible layout presets (stacked or compact) with configurable UI scaling.
 - Windows-friendly installer (`install.bat`) and launcher (`launch.bat`).
 
 ## Requirements
@@ -52,9 +55,16 @@ All application settings live in `config.yaml`. Key entries:
 | `resource_history_seconds` | Duration of history to plot in the chart. |
 | `resource_chart_height` | Height of the history chart in pixels. |
 | `resource_log_path` | CSV file path for resource usage logging. |
+| `resource_summary_path` | JSON file path that stores summary analytics after each run. |
+| `resource_alert_history_path` | CSV path that captures the alert history when alerts fire. |
 | `resource_alerts` | Thresholds (in %) for CPU/RAM/GPU/VRAM alerting. |
 | `alert_cooldown_seconds` | Minimum seconds between repeated alerts per metric. |
+| `analytics_trend_window` | Seconds of history to analyse for trend reporting in the summary. |
+| `ui_layout` | `stacked` (default) or `compact` horizontal layout for the GUI. |
+| `ui_scaling` | Tk scaling factor for high-DPI displays (e.g., `1.5`). |
+| `log_path` / `log_level` | Location and level for persistent application logs. |
 | `themes` | Collection of theme definitions; customize colors, fonts, and chart palettes. |
+| `ocr_preprocessing` | Language-aware preprocessing overrides for OCR (resize, filters, thresholds). |
 
 > **Placeholder note:** `video_path` defaults to `sample.mp4`. Replace this value
 > with a real video path on your system before running the app.
@@ -68,14 +78,27 @@ All application settings live in `config.yaml`. Key entries:
    temporarily suspend sampling without stopping the transcription.
 5. Resource alerts pop up automatically when usage crosses configured thresholds.
 6. When processing finishes, transcripts are written to the `output_text_path`.
-7. If resource logging is enabled, click **Open Resource Log** to inspect the CSV
+7. Review the resource summary banner and (if configured) open the JSON summary
+   or alert history directly from the GUI buttons.
+8. If resource logging is enabled, click **Open Resource Log** to inspect the CSV
    once it is generated.
 
-## Resource Logging and Alerts
+## Resource Logging, Analytics, and Alerts
 - Resource samples are written to `resource_log_path` (CSV) while monitoring is
   active. Each entry includes UTC timestamps for post-run analysis.
+- A JSON summary is generated at `resource_summary_path` after each run with
+  averages, minima/maxima, and trend insights for all monitored metrics.
+- Alert history is exported to `resource_alert_history_path` whenever thresholds
+  are crossed. Open the file straight from the GUI if alerts occurred.
 - Alerts respect the per-metric thresholds and cooldown defined in the config.
-  Alert messages surface in the GUI and as Windows dialogs.
+  Alert messages surface in the GUI, as Windows dialogs, and in the log file.
+
+## Layout and Scaling Presets
+- `ui_layout: stacked` recreates the original vertical layout, while
+  `ui_layout: compact` arranges monitoring widgets to the right of the video
+  preview for widescreen setups.
+- Use `ui_scaling` to adjust Tk's DPI scaling for high-resolution displays
+  (e.g., `1.25` or `1.5`).
 
 ## OCR and Verification Pipeline
 - `setup_ocr` initializes EasyOCR with GPU acceleration when available. When
@@ -95,9 +118,17 @@ All application settings live in `config.yaml`. Key entries:
   you have internet access or pre-download the model using `transformers-cli`.
 - **Virtual environment issues:** Delete the `venv` folder and rerun
   `install.bat` if dependencies become corrupted.
+- **Analytics files missing:** Ensure the directories in `resource_summary_path`
+  and `resource_alert_history_path` exist or allow ReadingRabbit to create them.
+  Summaries require at least one resource sample; alert logs only appear when
+  thresholds are crossed.
 
 ## Development Notes
 - All runtime options are centralized in `config.yaml` to simplify deployment.
-- Logging, alerts, themes, and monitoring features are designed for Windows 10,
-  but the core Python code remains cross-platform for development convenience.
+- Logging, alerts, themes, analytics, and monitoring features are designed for
+  Windows 10, but the core Python code remains cross-platform for development
+  convenience.
+- Automated tests cover configuration loading, resource monitoring analytics,
+  and the video processor pipeline. Run `pytest` inside the project directory to
+  validate changes before shipping.
 

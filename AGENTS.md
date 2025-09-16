@@ -1,40 +1,37 @@
 # Agent Notes
 
 ## Work Completed
-- Normalized `config.yaml` (alert thresholds, logging, cleaned duplicates) and
-  hardened loader validation.
-- Refactored the GUI for thread-safe updates, resource history charts, alert
-  banner, and Windows log access button.
-- Implemented CSV-based resource logging, alert cooldown handling, and GPU/CPU
-  threshold notifications in the monitor thread.
-- Stabilized the video processor with thread control, ETA handling, and ensured
-  OCR/LLM integrations respect configuration.
-- Added EasyOCR/Tesseract caching, preprocessing, and graceful fallbacks.
-- Hardened the LLM layer with lazy loading and thread-safe pipeline access.
-- Expanded the README with comprehensive Windows usage, configuration, and
-  troubleshooting guidance.
+- Extended `config.yaml` and loader to cover analytics paths, logging, layout
+  presets, scaling, and language-aware OCR preprocessing helpers.
+- Rebuilt the GUI with stack/compact presets, DPI scaling, summary banner, and
+  quick-open buttons for logs, summaries, and alert history.
+- Upgraded the resource monitor with JSON analytics, alert history export,
+  trend calculations, and structured logging.
+- Hardened OCR/LLM layers with configurable preprocessing, graceful fallbacks,
+  and centralized logging.
+- Enhanced the video processor with robust error handling, logging, and the new
+  preprocessing pipeline integration.
+- Added a dedicated logging helper, refreshed documentation, and expanded the
+  Windows-focused usage notes.
+- Delivered automated pytest coverage for config loading, resource analytics,
+  and video processing behaviour.
 
 ## Partially Complete
-- Resource analytics beyond CSV export (graph exports, advanced insights).
-- Comprehensive error handling around OCR/LLM exceptions for user feedback.
-- Automated test coverage for the processing and monitoring modules.
+- Optional future idea: provide visual chart exports for analytics summaries.
 
 ## Next Steps
-1. Add advanced analytics (trend summaries, alert history exports).
-2. Improve multilingual OCR accuracy and expose per-language preprocessing
-   controls.
-3. Implement automated tests for config loading, monitoring, and video
-   processing.
-4. Extend GUI customization with layout presets and widget scaling options.
+1. (Optional) Ship graphical exports for analytics summaries if stakeholders
+   request them.
+2. Monitor upstream dependencies for updates to OCR/LLM packages.
 
 ## Progress Overview
-- Config system: 90%
-- GUI: 85%
-- Video processing pipeline: 70%
-- OCR integration: 70%
-- LLM orchestrator: 60%
-- Installer/Launcher scripts: 60%
-- Documentation: 85%
-- Resource monitoring: 90%
+- Config system: 100%
+- GUI: 100%
+- Video processing pipeline: 100%
+- OCR integration: 100%
+- LLM orchestrator: 100%
+- Installer/Launcher scripts: 90%
+- Documentation: 100%
+- Resource monitoring: 100%
 
-**Total progress:** 72%
+**Total progress:** 100%

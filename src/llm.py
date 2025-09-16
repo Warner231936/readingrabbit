@@ -2,6 +2,7 @@
 """LLM orchestrator for text verification."""
 from __future__ import annotations
 
+import logging
 from threading import Lock
 
 try:
@@ -12,6 +13,7 @@ except Exception:  # transformers is optional at runtime
 
 _verifier = None
 _lock = Lock()
+_logger = logging.getLogger("readingrabbit")
 
 
 def verify_text(
@@ -34,6 +36,7 @@ def verify_text(
                 _verifier = pipeline("text2text-generation", model=model_name, device=device)
             except Exception:
                 _verifier = None
+                _logger.warning("Unable to load LLM model '%s'", model_name)
                 return text
 
     if _verifier is None:
@@ -44,5 +47,6 @@ def verify_text(
         result = _verifier(prompt, max_new_tokens=min(len(text), 128))
         return result[0]["generated_text"].strip()
     except Exception:
+        _logger.error("LLM verification failed", exc_info=True)
         return text
 

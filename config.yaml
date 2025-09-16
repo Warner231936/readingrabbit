@@ -14,12 +14,19 @@ monitor_interval: 1.0
 resource_history_seconds: 120
 resource_chart_height: 160
 resource_log_path: logs/resource_history.csv
+resource_summary_path: logs/resource_summary.json
+resource_alert_history_path: logs/resource_alerts.csv
 alert_cooldown_seconds: 45.0
+analytics_trend_window: 90.0
 resource_alerts:
   cpu: 95
   ram: 90
   gpu: 90
   vram: 90
+ui_layout: stacked
+ui_scaling: 1.0
+log_path: logs/app.log
+log_level: INFO
 themes:
   dark:
     background: "#0b0c10"
@@ -49,3 +56,29 @@ themes:
       ram: "#00c2ff"
       gpu: "#ff9f1c"
       vram: "#c084fc"
+ocr_preprocessing:
+  default:
+    grayscale: true
+    apply_to_easyocr: false
+    resize_scale: 1.25
+    bilateral_diameter: 7
+    bilateral_sigma_color: 60
+    bilateral_sigma_space: 60
+    clahe_clip_limit: 2.0
+    clahe_tile_grid_size: 8
+    use_adaptive_threshold: true
+    adaptive_threshold_block_size: 15
+    adaptive_threshold_c: 2.0
+    use_otsu_threshold: false
+  ja:
+    grayscale: true
+    apply_to_easyocr: true
+    resize_scale: 1.5
+    bilateral_diameter: 9
+    bilateral_sigma_color: 75
+    bilateral_sigma_space: 75
+    clahe_clip_limit: 2.5
+    clahe_tile_grid_size: 8
+    use_adaptive_threshold: true
+    adaptive_threshold_block_size: 17
+    adaptive_threshold_c: 1.5

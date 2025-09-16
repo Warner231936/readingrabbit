@@ -10,6 +10,7 @@ import cv2
 
 from .config import AppConfig
 from .llm import verify_text
+from .logger import get_logger
 from .ocr import extract_text, setup_ocr
 
 
@@ -23,9 +24,16 @@ class VideoProcessor:
         self.output_path = Path(config.output_text_path)
         self.update_callback = update_callback
         self.stop_event = stop_event
+        self.logger = get_logger()
 
     def process(self) -> None:
-        setup_ocr(self.config.use_gpu, self.config.ocr_languages, self.config.gpu_index)
+        self.logger.info("Initialising video processor for: %s", self.config.video_path)
+        setup_ocr(
+            self.config.use_gpu,
+            self.config.ocr_languages,
+            self.config.gpu_index,
+            self.config.preprocessing_for(self.config.ocr_languages),
+        )
         if self.config.threads:
             try:
                 cv2.setNumThreads(int(self.config.threads))
@@ -50,7 +58,11 @@ class VideoProcessor:
                     break
 
                 frame_idx += 1
-                text = extract_text(frame)
+                try:
+                    text = extract_text(frame)
+                except Exception as exc:
+                    self.logger.error("OCR failure on frame %s: %s", frame_idx, exc)
+                    text = ""
                 if text:
                     cleaned = verify_text(
                         text,
@@ -81,3 +93,6 @@ class VideoProcessor:
         if not cancelled and not self.stop_event.is_set():
             # Ensure the final 100% update is issued for short clips.
             self.update_callback(None, 100.0, 0.0)
+            self.logger.info("Video processing completed: %s", self.output_path)
+        elif cancelled:
+            self.logger.info("Video processing cancelled")
