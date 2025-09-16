@@ -1,96 +1,103 @@
 # ReadingRabbit
 
-
-ReadingRabbit is an evolving Windows-focused application that transcribes
-in-game chat from MP4 videos into text. It features a dark, cyber-themed
-Tkinter GUI, progress tracking, and plans for GPU-accelerated OCR with LLM
-verification. The application now includes live CPU/RAM/GPU monitoring and
-an estimated time remaining display during processing.
-
 ReadingRabbit is a Windows-focused application that transcribes in-game chat
-from MP4 videos into text. It features a themeable Tkinter GUI, live video
-playback, GPU-accelerated OCR, resource monitoring with historical charts, and
-LLM-based verification.
+from MP4 videos into text. It pairs a themeable Tkinter GUI with live video
+playback, GPU-accelerated OCR, optional LLM verification, and detailed resource
+monitoring with historical charts, alerts, and CSV exports.
 
+## Features
+- GPU-accelerated OCR with EasyOCR and automatic fallback to Tesseract.
+- Optional LLM verification for cleaner transcripts using Hugging Face models.
+- Dark, cyber-themed Tkinter interface with configurable themes stored in
+  `config.yaml`.
+- Live video preview, progress updates, and ETA calculations.
+- Real-time CPU/GPU/VRAM/RAM monitoring with history charts and pause/resume
+  controls.
+- Automatic resource alerting with configurable thresholds and cooldowns.
+- Resource usage logging to CSV for later analysis.
+- Windows-friendly installer (`install.bat`) and launcher (`launch.bat`).
+
+## Requirements
+- Windows 10 with Python 3.10 or later.
+- (Optional) CUDA-capable GPU for accelerated OCR and LLM inference.
+- (Optional) [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) for
+  CPU fallback; ensure `tesseract.exe` is on your `PATH`.
+
+All Python dependencies are listed in `requirements.txt` and installed by the
+batch installer.
 
 ## Setup
-1. Install Python 3.10+ on Windows 10.
-2. (Optional) Install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and ensure `tesseract.exe` is on your `PATH` for CPU fallback.
-3. Run `install.bat` to create a virtual environment and install dependencies.
-4. Configure settings in `config.yaml`.
-5. Launch the app with `launch.bat`.
+1. Install Python 3.10+ and ensure `python` is on your `PATH`.
+2. Clone or extract the ReadingRabbit project folder.
+3. Open **Command Prompt** and run `install.bat` from the project directory to
+   create a virtual environment and install dependencies.
+4. Review and update `config.yaml` (details below) before launching the app.
+5. Start the application with `launch.bat`.
+
+## Configuration (`config.yaml`)
+All application settings live in `config.yaml`. Key entries:
+
+| Key | Description |
+| --- | --- |
+| `video_path` | Path to the MP4 file to process. Update from the placeholder `sample.mp4`. |
+| `output_text_path` | Where the transcript will be written (directories auto-create). |
+| `use_gpu` / `gpu_index` | Enable GPU acceleration and select the GPU device. |
+| `ocr_languages` | List of language codes for OCR (e.g., `en`, `de`). |
+| `prompt_template` | Template for LLM verification (`{text}` is replaced with OCR output). |
+| `threads` | Number of OpenCV worker threads to use. |
+| `ui_theme` | Theme name from the `themes` section. |
+| `llm_model` | Hugging Face text-to-text model identifier (leave blank to disable verification). |
+| `show_resource_usage` | Toggle live monitoring widgets in the GUI. |
+| `monitor_interval` | Seconds between resource monitor updates. |
+| `resource_history_seconds` | Duration of history to plot in the chart. |
+| `resource_chart_height` | Height of the history chart in pixels. |
+| `resource_log_path` | CSV file path for resource usage logging. |
+| `resource_alerts` | Thresholds (in %) for CPU/RAM/GPU/VRAM alerting. |
+| `alert_cooldown_seconds` | Minimum seconds between repeated alerts per metric. |
+| `themes` | Collection of theme definitions; customize colors, fonts, and chart palettes. |
+
+> **Placeholder note:** `video_path` defaults to `sample.mp4`. Replace this value
+> with a real video path on your system before running the app.
 
 ## Usage
-1. Place your input MP4 file at the path specified by `video_path`.
-2. Run `launch.bat` and click **Start** in the GUI.
-3. During processing, watch live resource usage and ETA. Output text is
-   saved to the location defined by `output_text_path`.
+1. Update `config.yaml` with your video path and any desired settings.
+2. Run `launch.bat`. The GUI opens with the selected theme.
+3. Click **Start** to begin processing. Live progress, ETA, and the current video
+   frame appear immediately.
+4. Monitor CPU/GPU/VRAM/RAM usage in real time. Click **Pause Monitor** to
+   temporarily suspend sampling without stopping the transcription.
+5. Resource alerts pop up automatically when usage crosses configured thresholds.
+6. When processing finishes, transcripts are written to the `output_text_path`.
+7. If resource logging is enabled, click **Open Resource Log** to inspect the CSV
+   once it is generated.
 
-## Configuration
-All settings reside in `config.yaml`:
-- `video_path`: path to the input MP4 file.
-- `output_text_path`: where OCR text will be written.
-- `use_gpu`: toggle GPU usage when available.
-- `gpu_index`: GPU device index.
-- `ocr_languages`: list of language codes for OCR.
-- `prompt_template`: template used to craft the LLM prompt.
-- `threads`: number of processing threads.
-- `ui_theme`: interface theme (currently `dark`).
-- `llm_model`: identifier for the LLM used for verification.
+## Resource Logging and Alerts
+- Resource samples are written to `resource_log_path` (CSV) while monitoring is
+  active. Each entry includes UTC timestamps for post-run analysis.
+- Alerts respect the per-metric thresholds and cooldown defined in the config.
+  Alert messages surface in the GUI and as Windows dialogs.
 
-- `monitor_interval`: seconds between resource usage updates.
-
-- `show_resource_usage`: display CPU/GPU/RAM stats in the GUI.
-- `monitor_interval`: seconds between resource updates.
-- `resource_history_seconds`: amount of historical resource data to render in the chart.
-- `resource_chart_height`: height of the resource history chart in pixels.
-- `themes`: collection of named UI themes (e.g., `dark`, `midnight`).
-
-GPU statistics and acceleration require a compatible GPU plus the `gputil`,
-`torch`, and `easyocr` packages.
-
-### Theme customization
-
-Select the active theme with `ui_theme`. Each entry in the `themes` section can
-override:
-
-- Base colors (`background`, `surface`, `accent`, `text`, `highlight`, `danger`).
-- Font family and size (`font`, `font_size`).
-- Chart colors for CPU, RAM, GPU, and VRAM lines.
-
-Adjust or add themes to match your preferences. All UI settings remain inside
-`config.yaml`, so a single file controls the full experience.
-
-## Usage
-1. Place your target MP4 file at the path specified in `config.yaml`.
-2. Run `launch.bat` and press **Start** in the GUI.
-3. The current video frame, progress percentage, resource usage (including GPU
-   load and VRAM), resource history chart, and estimated time remaining will
-   appear.
-4. Use **Pause Monitor** to stop resource tracking temporarily (the history
-   chart pauses as well).
-5. OCR output is written to `output_text_path` when processing completes.
-6. Close the window or press the standard close button to stop processing.
-
-
-## Status
-This project is under active development. See `AGENTS.md` for detailed
-progress tracking and upcoming tasks.
+## OCR and Verification Pipeline
+- `setup_ocr` initializes EasyOCR with GPU acceleration when available. When
+  EasyOCR cannot load, ReadingRabbit falls back to Tesseract with automatic
+  preprocessing for clearer text.
+- If `llm_model` is defined, OCR output runs through the configured transformer
+  pipeline. Clear the field to record raw OCR text without verification.
 
 ## Troubleshooting
-- **Tesseract not found**: Ensure `tesseract.exe` is installed and added to your
-  `PATH` if you plan to use CPU fallback.
-- **Missing GPU metrics**: Install compatible GPU drivers and verify that the
-  `gputil` package detects your hardware.
-- **Model download errors**: The first run downloads the `t5-small` model from
-  Hugging Face. Confirm internet access or pre-download the model.
-- **OCR failures**: Confirm CUDA is available for EasyOCR or fall back to
-  Tesseract by setting `use_gpu` to `false`.
-- **Placeholder video path**: Update `video_path` in `config.yaml` with an MP4
-  file available on your system before starting the app.
+- **Video fails to open:** Confirm `video_path` points to a valid MP4 file and
+  that you have permissions to read it.
+- **Missing GPU metrics:** Install the NVIDIA drivers and ensure the `gputil`
+  package detects your hardware. If no GPU is available, the monitor shows `N/A`.
+- **Tesseract not found:** Install the Windows Tesseract build and add
+  `tesseract.exe` to the `PATH`, or install EasyOCR with GPU support.
+- **Model download errors:** The first LLM run downloads the chosen model. Ensure
+  you have internet access or pre-download the model using `transformers-cli`.
+- **Virtual environment issues:** Delete the `venv` folder and rerun
+  `install.bat` if dependencies become corrupted.
 
-## Advanced Usage
-- **Selecting a different LLM**: Edit `llm_model` in `config.yaml` with any
-  compatible text-to-text model from Hugging Face.
-- **Disabling LLM verification**: Set `llm_model` to an empty string to write
-  raw OCR text without model correction.
+## Development Notes
+- All runtime options are centralized in `config.yaml` to simplify deployment.
+- Logging, alerts, themes, and monitoring features are designed for Windows 10,
+  but the core Python code remains cross-platform for development convenience.
+

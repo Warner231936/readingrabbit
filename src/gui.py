@@ -1,11 +1,16 @@
+
 """Tkinter-based GUI for ReadingRabbit OCR."""
 from __future__ import annotations
 
+import os
+import sys
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from collections import deque
 from copy import deepcopy
+from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Mapping, Optional
 
@@ -63,7 +68,7 @@ class ResourceHistoryCanvas(tk.Canvas):
         theme: dict[str, Any],
         *,
         width: int = 420,
-        height: int = 140,
+        height: int = 160,
     ) -> None:
         self.theme = theme
         self.history_seconds = max(history_seconds, 10)
@@ -150,7 +155,6 @@ class ResourceHistoryCanvas(tk.Canvas):
                 font=small_font,
             )
 
-        # Determine total samples and axis labels
         sample_count = len(self.series["cpu"]["data"])
         if sample_count == 0:
             self.create_text(
@@ -173,14 +177,24 @@ class ResourceHistoryCanvas(tk.Canvas):
             for idx, value in enumerate(values):
                 if value is None:
                     if len(coords) >= 4:
-                        self.create_line(*coords, fill=series["color"], width=2, smooth=True)
+                        self.create_line(
+                            *coords,
+                            fill=series["color"],
+                            width=2,
+                            smooth=True,
+                        )
                     coords = []
                     continue
                 x = margin + (idx * x_step)
                 y = height - margin - ((value / 100) * plot_height)
                 coords.extend([x, y])
             if len(coords) >= 4:
-                self.create_line(*coords, fill=series["color"], width=2, smooth=True)
+                self.create_line(
+                    *coords,
+                    fill=series["color"],
+                    width=2,
+                    smooth=True,
+                )
 
         # Legend
         legend_x = margin
@@ -240,7 +254,8 @@ class AppGUI:
         show_resource_usage: bool = True,
         history_seconds: int = 120,
         monitor_interval: float = 1.0,
-        chart_height: int = 140,
+        chart_height: int = 160,
+        resource_log_path: Optional[str] = None,
     ) -> None:
         self.master = master
         self._on_start = on_start
@@ -249,6 +264,9 @@ class AppGUI:
         self.monitor_button: Optional[ttk.Button] = None
         self.show_resource_usage = show_resource_usage
         self._processing = False
+        self._resource_placeholder = "CPU: --% | GPU: --% | VRAM: --% | RAM: --%"
+        self._resource_log_path = Path(resource_log_path).expanduser() if resource_log_path else None
+        self.log_button: Optional[ttk.Button] = None
 
         self.theme = build_theme(theme)
         master.title("ReadingRabbit")
@@ -274,6 +292,12 @@ class AppGUI:
             background=self.theme["background"],
             foreground=self.theme["text"],
             font=(self.theme["font"], max(9, self.theme["font_size"] - 1)),
+        )
+        style.configure(
+            "Alert.TLabel",
+            background=self.theme["background"],
+            foreground=self.theme["danger"],
+            font=(self.theme["font"], max(10, self.theme["font_size"])),
         )
         style.configure(
             "TButton",
@@ -310,7 +334,7 @@ class AppGUI:
         self.status_label = ttk.Label(container, text="Idle", style="Status.TLabel")
         self.status_label.pack(padx=10, pady=6)
 
-        resources_text = "CPU: --% | GPU: --% | VRAM: --% | RAM: --%"
+        resources_text = self._resource_placeholder
         if not show_resource_usage:
             resources_text = "Resource monitoring disabled in config."
         self.resources_label = ttk.Label(
@@ -331,15 +355,11 @@ class AppGUI:
             )
             self.history_canvas.pack(padx=10, pady=(6, 12))
 
-        self.eta_label = ttk.Label(container, text="ETA: --:--:--", style="Resources.TLabel")
+        self.eta_label = ttk.Label(container, text="ETA: 00:00:00", style="Resources.TLabel")
         self.eta_label.pack(padx=10, pady=(6, 12))
 
-
-        self.status_label = ttk.Label(master, text="Idle")
-        self.status_label.pack(padx=10, pady=5)
-
-        self.resource_label = ttk.Label(master, text="CPU: 0%  RAM: 0%  GPU: 0%  ETA: 0s")
-        self.resource_label.pack(padx=10, pady=5)
+        self.alert_label = ttk.Label(container, text="", style="Alert.TLabel")
+        self.alert_label.pack(padx=10, pady=(0, 12))
 
         self.start_button = ttk.Button(container, text="Start", command=self._on_start_clicked)
         self.start_button.pack(padx=10, pady=(0, 12))
@@ -351,6 +371,15 @@ class AppGUI:
                 command=self._toggle_monitor,
             )
             self.monitor_button.pack(padx=10, pady=(0, 12))
+
+        if self._resource_log_path is not None and show_resource_usage:
+            self.log_button = ttk.Button(
+                container,
+                text="Open Resource Log",
+                command=self._open_resource_log,
+            )
+            self.log_button.state(["disabled"])
+            self.log_button.pack(padx=10, pady=(0, 12))
 
     def _on_start_clicked(self) -> None:
         if self._processing:
@@ -380,29 +409,41 @@ class AppGUI:
 
         self.master.after(0, update)
 
+    def prepare_for_run(self) -> None:
+        self.clear_alert()
+        self.reset_resources()
+        self.update_status("Initializing…")
+        self.update_progress(0.0)
+        self.update_eta(0.0)
+        if self.history_canvas is not None:
+            self.master.after(0, self.history_canvas.clear)
+        if self.monitor_button is not None:
+            def _reset_button() -> None:
+                self.monitoring = True
+                self.monitor_button.config(text="Pause Monitor")
+
+            self.master.after(0, _reset_button)
+
+    def reset_resources(self) -> None:
+        def update() -> None:
+            self.resources_label.configure(text=self._resource_placeholder)
+
+        self.master.after(0, update)
+
+    def clear_alert(self) -> None:
+        def update() -> None:
+            self.alert_label.configure(text="")
+
+        self.master.after(0, update)
+
     def update_progress(self, value: float) -> None:
-        self.progress["value"] = value
-        self.master.update_idletasks()
+        def update() -> None:
+            self.progress["value"] = max(0.0, min(100.0, value))
+
+        self.master.after(0, update)
 
     def update_status(self, text: str) -> None:
-        self.status_label["text"] = text
-        self.master.update_idletasks()
-
-    def update_resources(self, cpu: float, ram: float, gpu: float, eta: float):
-        gpu_text = f"GPU: {gpu:.0f}%" if gpu else "GPU: N/A"
-        self.resource_label['text'] = f"CPU: {cpu:.0f}%  RAM: {ram:.0f}%  {gpu_text}  ETA: {eta:.0f}s"
-        self.master.update_idletasks()
-
-    def show_frame(self, frame):
-
-    def show_frame(self, frame) -> None:
-
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(img)
-        imgtk = ImageTk.PhotoImage(image=img)
-        self.video_label.imgtk = imgtk
-        self.video_label.configure(image=imgtk)
-        self.master.update_idletasks()
+        self.master.after(0, lambda: self.status_label.configure(text=text))
 
     def update_resources(
         self,
@@ -411,26 +452,54 @@ class AppGUI:
         gpu_mem: Optional[float],
         ram: float,
     ) -> None:
-        gpu_text = "N/A"
-        vram_text = "N/A"
-        if gpu is not None:
-            gpu_text = f"{gpu:.1f}%"
-        if gpu_mem is not None:
-            vram_text = f"{gpu_mem:.1f}%"
-        self.resources_label["text"] = (
-            f"CPU: {cpu:.1f}% | GPU: {gpu_text} | VRAM: {vram_text} | RAM: {ram:.1f}%"
-        )
-        if self.history_canvas is not None:
-            self.history_canvas.add_sample(cpu, gpu, gpu_mem, ram)
-        self.master.update_idletasks()
+        def update() -> None:
+            gpu_text = "N/A" if gpu is None else f"{gpu:.1f}%"
+            vram_text = "N/A" if gpu_mem is None else f"{gpu_mem:.1f}%"
+            self.resources_label.configure(
+                text=(
+                    f"CPU: {cpu:.1f}% | GPU: {gpu_text} | VRAM: {vram_text} | RAM: {ram:.1f}%"
+                )
+            )
+            if self.history_canvas is not None:
+                self.history_canvas.add_sample(cpu, gpu, gpu_mem, ram)
+            if self._resource_log_path is not None and self.log_button is not None:
+                if self._resource_log_path.exists():
+                    self.log_button.state(["!disabled"])
+                else:
+                    self.log_button.state(["disabled"])
+
+        self.master.after(0, update)
 
     def update_eta(self, seconds: float) -> None:
-        eta_str = time.strftime("%H:%M:%S", time.gmtime(seconds)) if seconds else "00:00:00"
-        self.eta_label["text"] = f"ETA: {eta_str}"
-        self.master.update_idletasks()
+        def update() -> None:
+            total_seconds = max(0, int(seconds))
+            eta_str = time.strftime("%H:%M:%S", time.gmtime(total_seconds))
+            self.eta_label.configure(text=f"ETA: {eta_str}")
+
+        self.master.after(0, update)
+
+    def show_frame(self, frame) -> None:
+        if frame is None:
+            return
+
+        def update() -> None:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = Image.fromarray(rgb)
+            imgtk = ImageTk.PhotoImage(image=image)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+
+        self.master.after(0, update)
 
     def show_error(self, text: str) -> None:
-        messagebox.showerror("ReadingRabbit Error", text)
+        self.master.after(0, lambda: messagebox.showerror("ReadingRabbit Error", text))
+
+    def show_alert(self, text: str) -> None:
+        def update() -> None:
+            self.alert_label.configure(text=f"Alert: {text}")
+            messagebox.showwarning("ReadingRabbit Alert", text)
+
+        self.master.after(0, update)
 
     def _toggle_monitor(self) -> None:
         self.monitoring = not self.monitoring
@@ -440,3 +509,23 @@ class AppGUI:
             )
         if self.on_toggle_monitor:
             self.on_toggle_monitor(self.monitoring)
+
+    def _open_resource_log(self) -> None:
+        if self._resource_log_path is None:
+            return
+        path = self._resource_log_path
+        if not path.exists():
+            messagebox.showinfo(
+                "Resource Log",
+                f"The log will be created at: {path.resolve()}",
+            )
+            return
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)  # type: ignore[attr-defined]
+            else:
+                webbrowser.open(path.resolve().as_uri())
+        except Exception as exc:  # pragma: no cover - platform specific
+            messagebox.showerror("Resource Log", f"Unable to open log file: {exc}")
+
+

@@ -1,97 +1,38 @@
 
-"""System resource monitoring utilities."""
-from __future__ import annotations
-
-import threading
-import time
-from typing import Callable
-
-import psutil
-
-
-class ResourceMonitor:
-    """Periodically report CPU, RAM, GPU usage and ETA."""
-
-    def __init__(self, callback: Callable[[float, float, float, float], None], interval: float = 1.0, use_gpu: bool = True):
-        self.callback = callback
-        self.interval = interval
-        self.use_gpu = use_gpu
-        self._thread: threading.Thread | None = None
-        self._running = False
-        self._start_time = time.time()
-        self.progress = 0.0
-
-    def start(self) -> None:
-        if self._running:
-            return
-        self._running = True
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._running = False
-        if self._thread:
-            self._thread.join(timeout=0)
-
-    def update_progress(self, progress: float) -> None:
-        self.progress = progress
-
-    def _run(self) -> None:
-        try:
-            import GPUtil  # type: ignore
-        except Exception:  # pragma: no cover - optional dependency
-            GPUtil = None  # type: ignore
-
-        while self._running:
-            cpu = psutil.cpu_percent(interval=None)
-            ram = psutil.virtual_memory().percent
-            gpu = 0.0
-            if self.use_gpu and GPUtil:
-                try:
-                    gpus = GPUtil.getGPUs()  # type: ignore
-                    if gpus:
-                        gpu = gpus[0].load * 100
-                except Exception:
-                    gpu = 0.0
-            elapsed = time.time() - self._start_time
-            eta = (elapsed * (100 - self.progress) / self.progress) if self.progress > 0 else 0.0
-            self.callback(cpu, ram, gpu, eta)
-            time.sleep(self.interval)
-
-
 """Resource monitoring utilities for ReadingRabbit."""
 from __future__ import annotations
 
+import csv
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from threading import Event
-from typing import Callable, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import psutil
 
 try:
-    import GPUtil
-except Exception:  # GPUtil is optional
-    GPUtil = None
+    import GPUtil  # type: ignore
+except Exception:  # GPUtil is optional at runtime
+    GPUtil = None  # type: ignore
+
+
+UpdateCallback = Callable[[float, Optional[float], Optional[float], float], None]
+AlertCallback = Callable[[str, float], None]
 
 
 def get_gpu_usage(gpu_index: Optional[int] = None) -> Tuple[Optional[float], Optional[float]]:
-    """Return GPU load and memory usage percentages.
+    """Return GPU load and memory usage percentages."""
 
-    Parameters
-    ----------
-    gpu_index:
-        Preferred GPU index to sample. If ``None`` the first available GPU is
-        used.
-    """
     if GPUtil is None:
         return None, None
     try:
-        gpus = GPUtil.getGPUs()
+        gpus = GPUtil.getGPUs()  # type: ignore[attr-defined]
     except Exception:
         return None, None
     if not gpus:
         return None, None
-    index = gpu_index or 0
+    index = gpu_index if gpu_index is not None else 0
     try:
         gpu = gpus[index]
     except IndexError:
@@ -104,26 +45,108 @@ class ResourceMonitor:
 
     def __init__(
         self,
-        update_callback: Callable[[float, Optional[float], Optional[float], float], None],
+        update_callback: UpdateCallback,
         interval: float,
         stop_event: Event,
         pause_event: Event,
+        *,
         gpu_index: Optional[int] = None,
-    ):
+        log_path: Optional[str] = None,
+        alert_thresholds: Optional[Dict[str, float]] = None,
+        alert_callback: Optional[AlertCallback] = None,
+        alert_cooldown: float = 60.0,
+    ) -> None:
         self.update_callback = update_callback
-        self.interval = interval
+        self.interval = max(0.1, float(interval))
         self.stop_event = stop_event
         self.pause_event = pause_event
         self.gpu_index = gpu_index
+        self.log_path = Path(log_path).expanduser() if log_path else None
+        self.alert_thresholds = {
+            key.lower(): float(value)
+            for key, value in (alert_thresholds or {}).items()
+            if value is not None
+        }
+        self.alert_callback = alert_callback
+        self.alert_cooldown = max(0.0, float(alert_cooldown))
+        self._last_alerts: Dict[str, float] = {}
 
     def run(self) -> None:
-        while not self.stop_event.is_set():
-            if self.pause_event.is_set():
+        csv_file = None
+        writer = None
+        if self.log_path is not None:
+            try:
+                self.log_path.parent.mkdir(parents=True, exist_ok=True)
+                csv_file = self.log_path.open("w", newline="", encoding="utf-8")
+                writer = csv.writer(csv_file)
+                writer.writerow(["timestamp", "cpu", "ram", "gpu", "vram"])
+            except Exception:
+                csv_file = None
+                writer = None
+
+        # Prime CPU stats to avoid the first call returning 0.0
+        psutil.cpu_percent(interval=None)
+
+        try:
+            while not self.stop_event.is_set():
+                if self.pause_event.is_set():
+                    time.sleep(self.interval)
+                    continue
+
+                cpu = psutil.cpu_percent(interval=None)
+                ram = psutil.virtual_memory().percent
+                gpu_load, gpu_mem = get_gpu_usage(self.gpu_index)
+
+                if writer is not None and csv_file is not None:
+                    timestamp = datetime.now(timezone.utc).isoformat()
+                    writer.writerow(
+                        [
+                            timestamp,
+                            f"{cpu:.2f}",
+                            f"{ram:.2f}",
+                            "" if gpu_load is None else f"{gpu_load:.2f}",
+                            "" if gpu_mem is None else f"{gpu_mem:.2f}",
+                        ]
+                    )
+                    csv_file.flush()
+
+                self.update_callback(cpu, gpu_load, gpu_mem, ram)
+                self._check_alerts(cpu, gpu_load, gpu_mem, ram)
+
                 time.sleep(self.interval)
+        finally:
+            if csv_file is not None:
+                csv_file.close()
+
+    def _check_alerts(
+        self,
+        cpu: float,
+        gpu: Optional[float],
+        vram: Optional[float],
+        ram: float,
+    ) -> None:
+        if not self.alert_thresholds or not self.alert_callback:
+            return
+
+        metrics = {
+            "cpu": cpu,
+            "ram": ram,
+            "gpu": gpu,
+            "vram": vram,
+        }
+        now = time.monotonic()
+        for key, threshold in self.alert_thresholds.items():
+            value = metrics.get(key)
+            if value is None:
                 continue
-            cpu = psutil.cpu_percent()
-            ram = psutil.virtual_memory().percent
-            gpu_load, gpu_mem = get_gpu_usage(self.gpu_index)
-            self.update_callback(cpu, gpu_load, gpu_mem, ram)
-            time.sleep(self.interval)
+            if value >= threshold:
+                last = self._last_alerts.get(key)
+                if last is not None and (now - last) < self.alert_cooldown:
+                    continue
+                self._last_alerts[key] = now
+                try:
+                    self.alert_callback(key, value)
+                except Exception:
+                    # Alerts should never break monitoring
+                    pass
 
