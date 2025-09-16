@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import csv
+import json
+import logging
+import statistics
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import psutil
 
@@ -55,6 +58,9 @@ class ResourceMonitor:
         alert_thresholds: Optional[Dict[str, float]] = None,
         alert_callback: Optional[AlertCallback] = None,
         alert_cooldown: float = 60.0,
+        summary_path: Optional[str] = None,
+        alert_log_path: Optional[str] = None,
+        trend_window: float = 60.0,
     ) -> None:
         self.update_callback = update_callback
         self.interval = max(0.1, float(interval))
@@ -70,6 +76,15 @@ class ResourceMonitor:
         self.alert_callback = alert_callback
         self.alert_cooldown = max(0.0, float(alert_cooldown))
         self._last_alerts: Dict[str, float] = {}
+        self.summary_path = Path(summary_path).expanduser() if summary_path else None
+        self.alert_log_path = Path(alert_log_path).expanduser() if alert_log_path else None
+        self.trend_window = max(10.0, float(trend_window))
+        self.samples: List[Dict[str, float]] = []
+        self.sample_times: List[float] = []
+        self.summary_data: Optional[Dict[str, Dict[str, float]]] = None
+        self.summary_text: Optional[str] = None
+        self.alert_history: List[Tuple[str, str, float]] = []
+        self._logger = logging.getLogger("readingrabbit")
 
     def run(self) -> None:
         csv_file = None
@@ -97,6 +112,16 @@ class ResourceMonitor:
                 ram = psutil.virtual_memory().percent
                 gpu_load, gpu_mem = get_gpu_usage(self.gpu_index)
 
+                self.samples.append(
+                    {
+                        "cpu": float(cpu),
+                        "ram": float(ram),
+                        "gpu": float(gpu_load) if gpu_load is not None else float("nan"),
+                        "vram": float(gpu_mem) if gpu_mem is not None else float("nan"),
+                    }
+                )
+                self.sample_times.append(time.monotonic())
+
                 if writer is not None and csv_file is not None:
                     timestamp = datetime.now(timezone.utc).isoformat()
                     writer.writerow(
@@ -117,6 +142,94 @@ class ResourceMonitor:
         finally:
             if csv_file is not None:
                 csv_file.close()
+            self._finalise_summary()
+
+    def _finalise_summary(self) -> None:
+        if not self.samples:
+            return
+
+        summary: Dict[str, Dict[str, float]] = {}
+        trend_summary: Dict[str, float] = {}
+        window_seconds = self.trend_window
+        if self.sample_times:
+            cutoff = self.sample_times[-1] - window_seconds
+        else:
+            cutoff = 0.0
+
+        metrics = ("cpu", "ram", "gpu", "vram")
+        for metric in metrics:
+            values = [sample[metric] for sample in self.samples if not _is_nan(sample[metric])]
+            if not values:
+                continue
+            summary[metric] = {
+                "average": statistics.fmean(values),
+                "maximum": max(values),
+                "minimum": min(values),
+            }
+
+        for metric in metrics:
+            window_values = [
+                sample[metric]
+                for sample, timestamp in zip(self.samples, self.sample_times)
+                if timestamp >= cutoff and not _is_nan(sample[metric])
+            ]
+            if not window_values:
+                continue
+            trend_summary[metric] = window_values[-1] - window_values[0]
+
+        self.summary_data = summary
+        lines = ["Resource Summary:"]
+        for metric, stats in summary.items():
+            trend = trend_summary.get(metric)
+            trend_text = ""
+            if trend is not None:
+                direction = "increased" if trend > 0 else "decreased" if trend < 0 else "stayed level"
+                trend_text = f" (trend {direction} by {abs(trend):.1f}%)"
+            lines.append(
+                "- {name}: avg {avg:.1f}% | max {mx:.1f}% | min {mn:.1f}%{trend}".format(
+                    name=metric.upper(),
+                    avg=stats["average"],
+                    mx=stats["maximum"],
+                    mn=stats["minimum"],
+                    trend=trend_text,
+                )
+            )
+
+        if self.alert_history:
+            lines.append(f"- Alerts triggered: {len(self.alert_history)} (see alert log)")
+        else:
+            lines.append("- Alerts triggered: none")
+
+        self.summary_text = "\n".join(lines)
+
+        if self.summary_path is not None:
+            try:
+                self.summary_path.parent.mkdir(parents=True, exist_ok=True)
+                with self.summary_path.open("w", encoding="utf-8") as handle:
+                    json.dump(
+                        {
+                            "generated": datetime.now(timezone.utc).isoformat(),
+                            "interval": self.interval,
+                            "trend_window": window_seconds,
+                            "metrics": summary,
+                            "trend": trend_summary,
+                            "alerts_triggered": len(self.alert_history),
+                        },
+                        handle,
+                        indent=2,
+                    )
+            except Exception as exc:  # pragma: no cover - best effort
+                self._logger.error("Failed to write resource summary: %s", exc)
+
+        if self.alert_log_path is not None and self.alert_history:
+            try:
+                self.alert_log_path.parent.mkdir(parents=True, exist_ok=True)
+                with self.alert_log_path.open("w", newline="", encoding="utf-8") as handle:
+                    writer = csv.writer(handle)
+                    writer.writerow(["timestamp", "metric", "value"])
+                    writer.writerows(self.alert_history)
+            except Exception as exc:  # pragma: no cover - best effort
+                self._logger.error("Failed to write alert history: %s", exc)
 
     def _check_alerts(
         self,
@@ -144,9 +257,15 @@ class ResourceMonitor:
                 if last is not None and (now - last) < self.alert_cooldown:
                     continue
                 self._last_alerts[key] = now
+                timestamp = datetime.now(timezone.utc).isoformat()
+                self.alert_history.append((timestamp, key.upper(), float(value)))
                 try:
                     self.alert_callback(key, value)
                 except Exception:
                     # Alerts should never break monitoring
                     pass
+
+
+def _is_nan(value: float) -> bool:
+    return value != value
 

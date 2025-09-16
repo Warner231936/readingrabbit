@@ -1,5 +1,6 @@
 easyocr
 gputil
+numpy
 opencv-python
 Pillow
 psutil
@@ -7,3 +8,4 @@ PyYAML
 pytesseract
 torch
 transformers
+pytest
